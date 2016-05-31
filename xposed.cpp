@@ -175,11 +175,16 @@ void printRomInfo() {
             xposed->isSELinuxEnforcing ? "yes" : "no");
 }
 
-/** Parses /system/xposed.prop and stores selected values in variables */
+/** Parses xposed.prop and stores selected values in variables */
 void parseXposedProp() {
-    FILE *fp = fopen(XPOSED_PROP_FILE, "r");
+    char* finalXposedPropPath = NULL;
+    sprintf(finalXposedPropPath, "/su/%s", XPOSED_PROP_FILE);
+    if (access(finalXposedPropPath, R_OK) == -1) {
+        sprintf(finalXposedPropPath, "/system/%s", XPOSED_PROP_FILE);
+    }
+    FILE *fp = fopen(finalXposedPropPath, "r");
     if (fp == NULL) {
-        ALOGE("Could not read %s: %s", XPOSED_PROP_FILE, strerror(errno));
+        ALOGE("Could not read %s: %s", finalXposedPropPath, strerror(errno));
         return;
     }
 
@@ -333,15 +338,26 @@ bool addJarToClasspath() {
     }
     */
 
-    if (access(XPOSED_JAR, R_OK) == 0) {
-        if (!addPathToEnv("CLASSPATH", XPOSED_JAR))
+    char* finalXposedJarPath = NULL;
+    sprintf(finalXposedJarPath, "/su/%s", XPOSED_JAR);
+    if (access(finalXposedJarPath, R_OK) == 0) {
+        if (!addPathToEnv("CLASSPATH", finalXposedJarPath))
             return false;
 
-        ALOGI("Added Xposed (%s) to CLASSPATH", XPOSED_JAR);
+        ALOGI("Added Xposed (%s) to CLASSPATH", finalXposedJarPath);
         return true;
     } else {
-        ALOGE("ERROR: Could not access Xposed jar '%s'", XPOSED_JAR);
-        return false;
+        sprintf(finalXposedJarPath, "/system/%s", XPOSED_JAR);
+        if (access(finalXposedJarPath, R_OK) == 0) {
+            if (!addPathToEnv("CLASSPATH", finalXposedJarPath))
+                return false;
+
+            ALOGI("Added Xposed (%s) to CLASSPATH", finalXposedJarPath);
+            return true;
+        } else {
+            ALOGE("ERROR: Could not access Xposed jar '%s'", finalXposedJarPath);
+            return false;
+        }
     }
 }
 
@@ -389,7 +405,12 @@ void onVmCreated(JNIEnv* env) {
     }
 
     // Load the suitable libxposed_*.so for it
-    void* xposedLibHandle = dlopen(xposedLibPath, RTLD_NOW);
+    char* finalXposedLibPath = NULL;
+    sprintf(finalXposedLibPath, "/su/%s", xposedLibPath);
+    if (access(finalXposedLibPath, R_OK) == -1) {
+        sprintf(finalXposedLibPath, "/system/%s", xposedLibPath);
+    }
+    void* xposedLibHandle = dlopen(finalXposedLibPath, RTLD_NOW);
     if (!xposedLibHandle) {
         ALOGE("Could not load libxposed: %s", dlerror());
         return;

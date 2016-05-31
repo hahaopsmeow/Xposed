@@ -3,16 +3,16 @@
 
 #include "xposed_shared.h"
 
-#define XPOSED_PROP_FILE "/system/xposed.prop"
+#define XPOSED_PROP_FILE "xposed.prop"
 
 #if defined(__LP64__)
-  #define XPOSED_LIB_DIR "/system/lib64/"
+  #define XPOSED_LIB_DIR "lib64/"
 #else
-  #define XPOSED_LIB_DIR "/system/lib/"
+  #define XPOSED_LIB_DIR "lib/"
 #endif
 #define XPOSED_LIB_DALVIK        XPOSED_LIB_DIR "libxposed_dalvik.so"
 #define XPOSED_LIB_ART           XPOSED_LIB_DIR "libxposed_art.so"
-#define XPOSED_JAR               "/system/framework/XposedBridge.jar"
+#define XPOSED_JAR               "framework/XposedBridge.jar"
 #define XPOSED_JAR_NEWVERSION    XPOSED_DIR "bin/XposedBridge.jar.newversion"
 #define XPOSED_LOAD_BLOCKER      XPOSED_DIR "conf/disabled"
 #define XPOSED_SAFEMODE_NODELAY  XPOSED_DIR "conf/safemode_nodelay"
