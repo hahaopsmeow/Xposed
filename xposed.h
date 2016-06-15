@@ -3,6 +3,8 @@
 
 #include "xposed_shared.h"
 
+#define XPOSED_SYSTEMLESS_BASE "/xposed"
+#define XPOSED_SYSTEM_BASE "/system"
 #define XPOSED_PROP_FILE "xposed.prop"
 
 #if defined(__LP64__)

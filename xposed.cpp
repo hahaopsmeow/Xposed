@@ -178,9 +178,9 @@ void printRomInfo() {
 /** Parses xposed.prop and stores selected values in variables */
 void parseXposedProp() {
     char* finalXposedPropPath = NULL;
-    sprintf(finalXposedPropPath, "/su/%s", XPOSED_PROP_FILE);
+    sprintf(finalXposedPropPath, "%s/%s", XPOSED_SYSTEMLESS_BASE, XPOSED_PROP_FILE);
     if (access(finalXposedPropPath, R_OK) == -1) {
-        sprintf(finalXposedPropPath, "/system/%s", XPOSED_PROP_FILE);
+        sprintf(finalXposedPropPath, "%s/%s", XPOSED_SYSTEM_BASE, XPOSED_PROP_FILE);
     }
     FILE *fp = fopen(finalXposedPropPath, "r");
     if (fp == NULL) {
@@ -339,7 +339,7 @@ bool addJarToClasspath() {
     */
 
     char* finalXposedJarPath = NULL;
-    sprintf(finalXposedJarPath, "/su/%s", XPOSED_JAR);
+    sprintf(finalXposedJarPath, "%s/%s", XPOSED_SYSTEMLESS_BASE, XPOSED_JAR);
     if (access(finalXposedJarPath, R_OK) == 0) {
         if (!addPathToEnv("CLASSPATH", finalXposedJarPath))
             return false;
@@ -347,7 +347,7 @@ bool addJarToClasspath() {
         ALOGI("Added Xposed (%s) to CLASSPATH", finalXposedJarPath);
         return true;
     } else {
-        sprintf(finalXposedJarPath, "/system/%s", XPOSED_JAR);
+        sprintf(finalXposedJarPath, "%s/%s", XPOSED_SYSTEM_BASE, XPOSED_JAR);
         if (access(finalXposedJarPath, R_OK) == 0) {
             if (!addPathToEnv("CLASSPATH", finalXposedJarPath))
                 return false;
@@ -406,9 +406,9 @@ void onVmCreated(JNIEnv* env) {
 
     // Load the suitable libxposed_*.so for it
     char* finalXposedLibPath = NULL;
-    sprintf(finalXposedLibPath, "/su/%s", xposedLibPath);
+    sprintf(finalXposedLibPath, "%s/%s", XPOSED_SYSTEMLESS_BASE, xposedLibPath);
     if (access(finalXposedLibPath, R_OK) == -1) {
-        sprintf(finalXposedLibPath, "/system/%s", xposedLibPath);
+        sprintf(finalXposedLibPath, "%s/%s", XPOSED_SYSTEM_BASE, xposedLibPath);
     }
     void* xposedLibHandle = dlopen(finalXposedLibPath, RTLD_NOW);
     if (!xposedLibHandle) {
