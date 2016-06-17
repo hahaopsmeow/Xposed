@@ -177,15 +177,19 @@ void printRomInfo() {
 
 /** Parses xposed.prop and stores selected values in variables */
 void parseXposedProp() {
-    char* finalXposedPropPath = NULL;
-    sprintf(finalXposedPropPath, "%s/%s", XPOSED_SYSTEMLESS_BASE, XPOSED_PROP_FILE);
-    if (access(finalXposedPropPath, R_OK) == -1) {
-        sprintf(finalXposedPropPath, "%s/%s", XPOSED_SYSTEM_BASE, XPOSED_PROP_FILE);
-    }
+    char finalXposedPropPath[64];
+    snprintf(finalXposedPropPath, sizeof(finalXposedPropPath), "%s/%s", XPOSED_SYSTEMLESS_BASE, XPOSED_PROP_FILE);
     FILE *fp = fopen(finalXposedPropPath, "r");
     if (fp == NULL) {
-        ALOGE("Could not read %s: %s", finalXposedPropPath, strerror(errno));
-        return;
+        ALOGI("Could not read systemless %s: %s", finalXposedPropPath, strerror(errno));
+
+        snprintf(finalXposedPropPath, sizeof(finalXposedPropPath), "%s/%s", XPOSED_SYSTEM_BASE, XPOSED_PROP_FILE);
+        ALOGI("Trying system-based version %s", finalXposedPropPath);
+        fp = fopen(finalXposedPropPath, "r");
+        if (fp == NULL) {
+          ALOGE("Could not read %s: %s", finalXposedPropPath, strerror(errno));
+          return;
+        }
     }
 
     char buf[512];
@@ -338,8 +342,8 @@ bool addJarToClasspath() {
     }
     */
 
-    char* finalXposedJarPath = NULL;
-    sprintf(finalXposedJarPath, "%s/%s", XPOSED_SYSTEMLESS_BASE, XPOSED_JAR);
+    char finalXposedJarPath[64];
+    snprintf(finalXposedJarPath, sizeof(finalXposedJarPath), "%s/%s", XPOSED_SYSTEMLESS_BASE, XPOSED_JAR);
     if (access(finalXposedJarPath, R_OK) == 0) {
         if (!addPathToEnv("CLASSPATH", finalXposedJarPath))
             return false;
@@ -347,7 +351,10 @@ bool addJarToClasspath() {
         ALOGI("Added Xposed (%s) to CLASSPATH", finalXposedJarPath);
         return true;
     } else {
-        sprintf(finalXposedJarPath, "%s/%s", XPOSED_SYSTEM_BASE, XPOSED_JAR);
+        ALOGI("Could not access systemless Xposed jar '%s'", finalXposedJarPath);
+
+        snprintf(finalXposedJarPath, sizeof(finalXposedJarPath), "%s/%s", XPOSED_SYSTEM_BASE, XPOSED_JAR);
+        ALOGI("Trying system-based version %s", finalXposedPropPath);
         if (access(finalXposedJarPath, R_OK) == 0) {
             if (!addPathToEnv("CLASSPATH", finalXposedJarPath))
                 return false;
@@ -405,15 +412,19 @@ void onVmCreated(JNIEnv* env) {
     }
 
     // Load the suitable libxposed_*.so for it
-    char* finalXposedLibPath = NULL;
-    sprintf(finalXposedLibPath, "%s/%s", XPOSED_SYSTEMLESS_BASE, xposedLibPath);
-    if (access(finalXposedLibPath, R_OK) == -1) {
-        sprintf(finalXposedLibPath, "%s/%s", XPOSED_SYSTEM_BASE, xposedLibPath);
-    }
+    char finalXposedLibPath[4096];
+    snprintf(finalXposedLibPath, sizeof(finalXposedLibPath), "%s/%s", XPOSED_SYSTEMLESS_BASE, xposedLibPath);
     void* xposedLibHandle = dlopen(finalXposedLibPath, RTLD_NOW);
     if (!xposedLibHandle) {
-        ALOGE("Could not load libxposed: %s", dlerror());
-        return;
+        ALOGI("Could not load systemless libxposed: %s", dlerror());
+
+        snprintf(finalXposedLibPath, sizeof(finalXposedLibPath), "%s/%s", XPOSED_SYSTEM_BASE, xposedLibPath);
+        ALOGI("Trying system-based version %s", finalXposedPropPath);
+        xposedLibHandle = dlopen(finalXposedLibPath, RTLD_NOW);
+        if (!xposedLibHandle) {
+            ALOGE("Could not load libxposed: %s", dlerror());
+            return;
+        }
     }
 
     // Clear previous errors
