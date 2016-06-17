@@ -354,7 +354,7 @@ bool addJarToClasspath() {
         ALOGI("Could not access systemless Xposed jar '%s'", finalXposedJarPath);
 
         snprintf(finalXposedJarPath, sizeof(finalXposedJarPath), "%s/%s", XPOSED_SYSTEM_BASE, XPOSED_JAR);
-        ALOGI("Trying system-based version %s", finalXposedPropPath);
+        ALOGI("Trying system-based version %s", finalXposedJarPath);
         if (access(finalXposedJarPath, R_OK) == 0) {
             if (!addPathToEnv("CLASSPATH", finalXposedJarPath))
                 return false;
