@@ -419,7 +419,7 @@ void onVmCreated(JNIEnv* env) {
         ALOGI("Could not load systemless libxposed: %s", dlerror());
 
         snprintf(finalXposedLibPath, sizeof(finalXposedLibPath), "%s/%s", XPOSED_SYSTEM_BASE, xposedLibPath);
-        ALOGI("Trying system-based version %s", finalXposedPropPath);
+        ALOGI("Trying system-based version %s", finalXposedLibPath);
         xposedLibHandle = dlopen(finalXposedLibPath, RTLD_NOW);
         if (!xposedLibHandle) {
             ALOGE("Could not load libxposed: %s", dlerror());
