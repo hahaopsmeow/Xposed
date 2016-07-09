@@ -28,6 +28,7 @@ jclass classXposedBridge = NULL;
 static jclass classXResources = NULL;
 static jclass classFileResult = NULL;
 
+jmethodID methodXposedBridgeHandleHookedMethod = NULL;
 static jmethodID methodXResourcesTranslateResId = NULL;
 static jmethodID methodXResourcesTranslateAttrId = NULL;
 static jmethodID constructorFileResult = NULL;
@@ -37,6 +38,7 @@ static jmethodID constructorFileResult = NULL;
 // Forward declarations
 ////////////////////////////////////////////////////////////
 
+static int register_natives_XposedBridge(JNIEnv* env, jclass clazz);
 static int register_natives_XResources(JNIEnv* env, jclass clazz);
 static int register_natives_ZygoteService(JNIEnv* env, jclass clazz);
 
@@ -60,62 +62,40 @@ int readIntConfig(const char* fileName, int defaultValue) {
 
 
 ////////////////////////////////////////////////////////////
-// JNI methods
+// Library initialization
 ////////////////////////////////////////////////////////////
 
-jobject XposedBridge_getStartClassName(JNIEnv* env, jclass clazz) {
-    return env->NewStringUTF(xposed->startClassName);
-}
-
-jboolean XposedBridge_startsSystemServer(JNIEnv* env, jclass clazz) {
-    return xposed->startSystemServer;
-}
-
-jint XposedBridge_getXposedVersion(JNIEnv* env, jclass clazz) {
-    return xposed->xposedVersionInt;
-}
-
-jboolean XposedBridge_initNative(JNIEnv* env, jclass clazz) {
-    if (!xposedLoadedSuccessfully) {
-        ALOGE("Not initializing Xposed because of previous errors");
-        return false;
-    }
-
-    if (!callback_XposedBridge_initNative(env))
-        return false;
-
-    classXResources = env->FindClass(CLASS_XRESOURCES);
-    classXResources = reinterpret_cast<jclass>(env->NewGlobalRef(classXResources));
-    if (classXResources == NULL) {
-        ALOGE("Error while loading XResources class '%s':", CLASS_XRESOURCES);
+bool initXposedBridge(JNIEnv* env) {
+    classXposedBridge = env->FindClass(CLASS_XPOSED_BRIDGE);
+    if (classXposedBridge == NULL) {
+        ALOGE("Error while loading Xposed class '%s':", CLASS_XPOSED_BRIDGE);
         logExceptionStackTrace();
         env->ExceptionClear();
         return false;
     }
-    if (register_natives_XResources(env, classXResources) != JNI_OK) {
-        ALOGE("Could not register natives for '%s'", CLASS_XRESOURCES);
-        env->ExceptionClear();
-        return false;
-    }
+    classXposedBridge = reinterpret_cast<jclass>(env->NewGlobalRef(classXposedBridge));
 
-    methodXResourcesTranslateResId = env->GetStaticMethodID(classXResources, "translateResId",
-        "(ILandroid/content/res/XResources;Landroid/content/res/Resources;)I");
-    if (methodXResourcesTranslateResId == NULL) {
-        ALOGE("ERROR: could not find method %s.translateResId(int, Resources, Resources)", CLASS_XRESOURCES);
+    ALOGI("Found Xposed class '%s', now initializing", CLASS_XPOSED_BRIDGE);
+    if (register_natives_XposedBridge(env, classXposedBridge) != JNI_OK) {
+        ALOGE("Could not register natives for '%s'", CLASS_XPOSED_BRIDGE);
         logExceptionStackTrace();
         env->ExceptionClear();
         return false;
     }
 
-    methodXResourcesTranslateAttrId = env->GetStaticMethodID(classXResources, "translateAttrId",
-        "(Ljava/lang/String;Landroid/content/res/XResources;)I");
-    if (methodXResourcesTranslateAttrId == NULL) {
-        ALOGE("ERROR: could not find method %s.findAttrId(String, Resources, Resources)", CLASS_XRESOURCES);
+    methodXposedBridgeHandleHookedMethod = env->GetStaticMethodID(classXposedBridge, "handleHookedMethod",
+        "(Ljava/lang/reflect/Member;ILjava/lang/Object;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;");
+    if (methodXposedBridgeHandleHookedMethod == NULL) {
+        ALOGE("ERROR: could not find method %s.handleHookedMethod(Member, int, Object, Object, Object[])", CLASS_XPOSED_BRIDGE);
         logExceptionStackTrace();
         env->ExceptionClear();
         return false;
     }
 
+    return true;
+}
+
+bool initZygoteService(JNIEnv* env) {
     jclass zygoteServiceClass = env->FindClass(CLASS_ZYGOTE_SERVICE);
     if (zygoteServiceClass == NULL) {
         ALOGE("Error while loading ZygoteService class '%s':", CLASS_ZYGOTE_SERVICE);
@@ -130,13 +110,13 @@ jboolean XposedBridge_initNative(JNIEnv* env, jclass clazz) {
     }
 
     classFileResult = env->FindClass(CLASS_FILE_RESULT);
-    classFileResult = reinterpret_cast<jclass>(env->NewGlobalRef(classFileResult));
     if (classFileResult == NULL) {
         ALOGE("Error while loading FileResult class '%s':", CLASS_FILE_RESULT);
         logExceptionStackTrace();
         env->ExceptionClear();
         return false;
     }
+    classFileResult = reinterpret_cast<jclass>(env->NewGlobalRef(classFileResult));
 
     constructorFileResult = env->GetMethodID(classFileResult, "<init>", "(JJ)V");
     if (constructorFileResult == NULL) {
@@ -149,7 +129,87 @@ jboolean XposedBridge_initNative(JNIEnv* env, jclass clazz) {
     return true;
 }
 
-void XResources_rewriteXmlReferencesNative(JNIEnv* env, jclass clazz,
+void onVmCreatedCommon(JNIEnv* env) {
+    if (!initXposedBridge(env) || !initZygoteService(env)) {
+        return;
+    }
+
+    jclass classXTypedArray = env->FindClass(CLASS_XTYPED_ARRAY);
+    if (classXTypedArray == NULL) {
+        ALOGE("Error while loading XTypedArray class '%s':", CLASS_XTYPED_ARRAY);
+        logExceptionStackTrace();
+        env->ExceptionClear();
+        return;
+    }
+    prepareSubclassReplacement(env, classXTypedArray);
+
+    if (!onVmCreated(env)) {
+        return;
+    }
+
+    xposedLoadedSuccessfully = true;
+    return;
+}
+
+
+////////////////////////////////////////////////////////////
+// JNI methods
+////////////////////////////////////////////////////////////
+
+jboolean XposedBridge_hadInitErrors(JNIEnv*, jclass) {
+    return !xposedLoadedSuccessfully;
+}
+
+jobject XposedBridge_getStartClassName(JNIEnv* env, jclass) {
+    return env->NewStringUTF(xposed->startClassName);
+}
+
+jboolean XposedBridge_startsSystemServer(JNIEnv*, jclass) {
+    return xposed->startSystemServer;
+}
+
+jint XposedBridge_getXposedVersion(JNIEnv*, jclass) {
+    return xposed->xposedVersionInt;
+}
+
+jboolean XposedBridge_initXResourcesNative(JNIEnv* env, jclass) {
+    classXResources = env->FindClass(CLASS_XRESOURCES);
+    if (classXResources == NULL) {
+        ALOGE("Error while loading XResources class '%s':", CLASS_XRESOURCES);
+        logExceptionStackTrace();
+        env->ExceptionClear();
+        return false;
+    }
+    classXResources = reinterpret_cast<jclass>(env->NewGlobalRef(classXResources));
+
+    if (register_natives_XResources(env, classXResources) != JNI_OK) {
+        ALOGE("Could not register natives for '%s'", CLASS_XRESOURCES);
+        env->ExceptionClear();
+        return false;
+    }
+
+    methodXResourcesTranslateResId = env->GetStaticMethodID(classXResources, "translateResId",
+        "(ILandroid/content/res/XResources;Landroid/content/res/Resources;)I");
+    if (methodXResourcesTranslateResId == NULL) {
+        ALOGE("ERROR: could not find method %s.translateResId(int, XResources, Resources)", CLASS_XRESOURCES);
+        logExceptionStackTrace();
+        env->ExceptionClear();
+        return false;
+    }
+
+    methodXResourcesTranslateAttrId = env->GetStaticMethodID(classXResources, "translateAttrId",
+        "(Ljava/lang/String;Landroid/content/res/XResources;)I");
+    if (methodXResourcesTranslateAttrId == NULL) {
+        ALOGE("ERROR: could not find method %s.findAttrId(String, XResources)", CLASS_XRESOURCES);
+        logExceptionStackTrace();
+        env->ExceptionClear();
+        return false;
+    }
+
+    return true;
+}
+
+void XResources_rewriteXmlReferencesNative(JNIEnv* env, jclass,
             jlong parserPtr, jobject origRes, jobject repRes) {
 
     using namespace android;
@@ -218,7 +278,7 @@ void XResources_rewriteXmlReferencesNative(JNIEnv* env, jclass clazz,
 }
 
 
-jboolean ZygoteService_checkFileAccess(JNIEnv* env, jclass clazz, jstring filenameJ, jint mode) {
+jboolean ZygoteService_checkFileAccess(JNIEnv* env, jclass, jstring filenameJ, jint mode) {
 #if XPOSED_WITH_SELINUX
     ScopedUtfChars filename(env, filenameJ);
     return xposed->zygoteservice_accessFile(filename.c_str(), mode) == 0;
@@ -227,7 +287,7 @@ jboolean ZygoteService_checkFileAccess(JNIEnv* env, jclass clazz, jstring filena
 #endif  // XPOSED_WITH_SELINUX
 }
 
-jobject ZygoteService_statFile(JNIEnv* env, jclass clazz, jstring filenameJ) {
+jobject ZygoteService_statFile(JNIEnv* env, jclass, jstring filenameJ) {
 #if XPOSED_WITH_SELINUX
     ScopedUtfChars filename(env, filenameJ);
 
@@ -248,7 +308,7 @@ jobject ZygoteService_statFile(JNIEnv* env, jclass clazz, jstring filenameJ) {
 #endif  // XPOSED_WITH_SELINUX
 }
 
-jbyteArray ZygoteService_readFile(JNIEnv* env, jclass clazz, jstring filenameJ) {
+jbyteArray ZygoteService_readFile(JNIEnv* env, jclass, jstring filenameJ) {
 #if XPOSED_WITH_SELINUX
     ScopedUtfChars filename(env, filenameJ);
 
@@ -285,11 +345,12 @@ jbyteArray ZygoteService_readFile(JNIEnv* env, jclass clazz, jstring filenameJ) 
 
 int register_natives_XposedBridge(JNIEnv* env, jclass clazz) {
     const JNINativeMethod methods[] = {
+        NATIVE_METHOD(XposedBridge, hadInitErrors, "()Z"),
         NATIVE_METHOD(XposedBridge, getStartClassName, "()Ljava/lang/String;"),
         NATIVE_METHOD(XposedBridge, getRuntime, "()I"),
         NATIVE_METHOD(XposedBridge, startsSystemServer, "()Z"),
         NATIVE_METHOD(XposedBridge, getXposedVersion, "()I"),
-        NATIVE_METHOD(XposedBridge, initNative, "()Z"),
+        NATIVE_METHOD(XposedBridge, initXResourcesNative, "()Z"),
         NATIVE_METHOD(XposedBridge, hookMethodNative, "(Ljava/lang/reflect/Member;Ljava/lang/Class;ILjava/lang/Object;)V"),
 #ifdef ART_TARGET
         NATIVE_METHOD(XposedBridge, invokeOriginalMethodNative,
